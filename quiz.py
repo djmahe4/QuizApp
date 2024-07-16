@@ -105,7 +105,7 @@ def generate_questions(query,chat_session):
                 if 'answer' in match.lower():
                     match2 = re.search(r"\((.)\)", match)
                     if match2:
-                        extracted_character = match.group(1)
+                        extracted_character = match2.group(1)
                         diction.update({"answer": extracted_character})
                 #if type(match[0])==int:
                 try:
