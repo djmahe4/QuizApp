@@ -1,13 +1,17 @@
 import time
 import tkinter as tk
 import random
-from tkinter import messagebox,simpledialog
+from tkinter import messagebox,simpledialog,Button,Text
 import google.generativeai as genai
 from dotenv import load_dotenv, find_dotenv
 import os
 import re
 from time import sleep
+from pylatexenc.latex2text import LatexNodes2Text
 
+
+def latex_to_unicode(latex_str):
+    return LatexNodes2Text().latex_to_text(latex_str)
 
 def init():
     # Find or create .env file
@@ -74,8 +78,11 @@ def generate_questions(query,chat_session):
     try:
         while True:
             response = chat_session.send_message(query)
+            #response=latex_to_unicode(response.text)
             # Extract the question and answer from the generated text
             question_answer = response.text.replace("*","").replace("**","")
+            #question_answer = response.replace("*", "").replace("**", "")
+            print(question_answer)
 
             # Define a pattern to extract the question, options, and answer
             #pattern = r"\d+\.(.*?)\n\((a)\)(.*?)\n\((b)\)(.*?)\n\((c)\)(.*?)\n\((d)\)(.*?)\n\n\*\*AnswerKey:\*\*\n(\d+)\.\((.)\)"
@@ -93,8 +100,13 @@ def generate_questions(query,chat_session):
             }
             questions_list.append(diction)
             for match in matches:
-                if match==" " or match=="" or "answer" in match.lower():
+                if match==" " or match=="" :#or "answer" in match.lower():
                     continue
+                if 'answer' in match.lower():
+                    match2 = re.search(r"\((.)\)", match)
+                    if match2:
+                        extracted_character = match.group(1)
+                        diction.update({"answer": extracted_character})
                 #if type(match[0])==int:
                 try:
                     if int(match[0]) and len(match)>10:
@@ -102,6 +114,8 @@ def generate_questions(query,chat_session):
                         print(match[3:])
                 except ValueError:
                     pass
+                if diction["question"]=="" and match.endswith("?"):
+                    diction["question"]=match
                 if match[1]=='a':
                     diction['options'][0]=match
                 if match[1]=='b':
@@ -127,7 +141,8 @@ def generate_questions(query,chat_session):
                 #else:
                     #diction["question"]+=match
             break
-    except questions_list==[]:
+    #except questions_list==[]:
+    except UnboundLocalError:
         sleep(10)
         print("retrying..")
 
@@ -143,7 +158,12 @@ class TestPQRSApp:
         #super().__init__(rt)
         self.root = rt
         self.root.title("Quiz App")
+        self.output_text = tk.Text(self.root, height=20, width=80)
+        self.output_text.pack()
         self.setup_test_ui()
+        # Create a close button
+        #self.close_button = Button(self.test_window, text="Close", command=self.close_app)
+        #self.close_button.pack()
 
     def setup_test_ui(self):
         self.test_window = tk.Toplevel(self.root)
@@ -159,11 +179,12 @@ class TestPQRSApp:
         self.score_label = tk.Label(self.test_window, text="Score: 0")
         self.score_label.pack()
 
+
     def test(self):
         topic = simpledialog.askstring("Enter Topic", "Please enter a topic for the quiz:")
         if topic:
             self.questions = generate_questions(f"Formulate mcq quiz on {topic} with answers",chat)
-            random.shuffle(self.questions)  # Shuffle the questions
+            #random.shuffle(self.questions)  # Shuffle the questions
             self.score = 0
             self.current_question_index = 0
             self.load_next_question()
@@ -171,7 +192,11 @@ class TestPQRSApp:
             self.output_text.insert(tk.END, "No topic entered. Canceling test.\n")
 
     def load_next_question(self):
-        if self.current_question_index < len(self.questions) or self.questions[self.current_question_index]["answer"]!="":
+        if self.questions[self.current_question_index]["question"] == "":
+            self.test_window.destroy()
+            self.test()
+        if self.current_question_index < len(self.questions) or self.questions[self.current_question_index][
+            "answer"] != "":
             question_data = self.questions[self.current_question_index]
             question = question_data["question"]
             options = question_data["options"]
@@ -194,9 +219,16 @@ class TestPQRSApp:
         self.score_label.config(text=f"Score: {self.score}")
         self.load_next_question()
 
+
+
     def finish_test(self):
         messagebox.showinfo("Test Completed", f"Your final score is: {self.score}")
         self.test_window.destroy()
+        self.cont=tk.Tk()
+        result = messagebox.askyesnocancel("Confirmation", "Do you want to continue?")
+        if not result:
+            self.cont.destroy()
+            root.destroy()
 
 if __name__ == "__main__":
     chat=init()
